@@ -2,11 +2,12 @@ from data_types_module import dword, word, char
 from utils import color
 from obj import Obj
 from collections import namedtuple
-
+from math import sin, cos
 
 BLACK = color(0, 0, 0)
 WHITE = color(1, 1, 1)
 RED = color(1, 0, 0)
+PI = 3.141592653589793
 
 V2 = namedtuple('Point2', ['x', 'y'])
 V3 = namedtuple('Point3', ['x', 'y', 'z'])
@@ -73,6 +74,27 @@ def baryCoords(A, B, C, P):
         return -1, -1, -1
 
     return u, v, w
+
+def _deg2rad(degrees):
+	radians = degrees * (PI/180)
+	return radians
+
+#only for square matrix
+def matrixMul(matrix1, matrix2, isVector=False):
+	matrix = [[0 for x in range(len(matrix1))] for y in range(len(matrix2[0]))]
+	for i in range(len(matrix1)):
+		for j in range(len(matrix2[0])):
+			for k in range(len(matrix2)):
+				matrix[i][j] += matrix1[i][k] * matrix2[k][j]
+	return matrix
+
+def matXvect(matrix1, vector):
+	matrix = [[0 for x in range(len(matrix1))] for y in range(1)]
+	for i in range(len(matrix1)):
+		for j in range(1):
+			for k in range(len(vector)):
+				matrix[0][i] += matrix1[i][k] * vector[k]
+	return matrix
 
 class Render(object):
 
@@ -249,12 +271,64 @@ class Render(object):
 					y += 1 if y0 < y1 else -1
 					limit += 1
 
-	def transform(self, vertex, translate=V3(0,0,0), scale=V3(1,1,1)):
-		return V3(round(vertex[0] * scale.x + translate.x),round(vertex[1] * scale.y + translate.y),round(vertex[2] * scale.z + translate.z))
+	def transform(self, vertex, vMatrix):
+
+		augVertex= [vertex[0], vertex[1], vertex[2], 1]
+		transVertex = matXvect(vMatrix, augVertex)
+
+		transVertex = 	V3(transVertex[0][0] / transVertex[0][3],
+						transVertex[0][1] / transVertex[0][3],
+						transVertex[0][2] / transVertex[0][3])
+
+		
+		return transVertex
 
 
-	def loadModel(self, filename, translate=V3(0,0,0), scale=V3(1,1,1), isWireframe = False):
+	def createModelMatrix(self, translate = V3(0,0,0), scale = V3(1,1,1), rotate=V3(0,0,0)):
+
+		translateMatrix = [[1, 0, 0, translate.x],
+							[0, 1, 0, translate.y],
+							[0, 0, 1, translate.z],
+							[0, 0, 0, 1]]
+
+		scaleMatrix = [[scale.x, 0, 0, 0],
+						[0, scale.y, 0, 0],
+						[0, 0, scale.z, 0],
+						[0, 0, 0, 1]]
+								
+		rotationMatrix = self.createRotationMatrix(rotate)
+
+		return matrixMul(matrixMul(translateMatrix, rotationMatrix), scaleMatrix)
+
+	def createRotationMatrix(self, rotate=V3(0,0,0)):
+
+		pitch = _deg2rad(rotate.x)
+		yaw = _deg2rad(rotate.y)
+		roll = _deg2rad(rotate.z)
+
+		rotationX = [[1, 0, 0, 0],
+					[0, cos(pitch),-sin(pitch), 0],
+					[0, sin(pitch), cos(pitch), 0],
+					[0, 0, 0, 1]]
+
+		rotationY = [[cos(yaw), 0, sin(yaw), 0],
+					[0, 1, 0, 0],
+					[-sin(yaw), 0, cos(yaw), 0],
+					[0, 0, 0, 1]]
+
+		rotationZ = [[cos(roll),-sin(roll), 0, 0],
+					[sin(roll), cos(roll), 0, 0],
+					[0, 0, 1, 0],
+					[0, 0, 0, 1]]
+
+		return matrixMul(matrixMul(rotationX, rotationY), rotationZ)	
+
+	def loadModel(self, filename, translate=V3(0,0,0), scale=V3(1,1,1), rotate=V3(0,0,0), isWireframe = False):
 		model = Obj(filename)
+
+		modelMatrix = self.createModelMatrix(translate, scale, rotate)
+
+		rotationMatrix = self.createRotationMatrix(rotate)
 
 		for face in model.faces:
 
@@ -279,11 +353,11 @@ class Render(object):
 				if vertCount > 3:
 					v3 = model.vertices[ face[3][0] - 1 ]
 
-				v0 = self.transform(v0,translate, scale)
-				v1 = self.transform(v1,translate, scale)
-				v2 = self.transform(v2,translate, scale)
+				v0 = self.transform(v0,modelMatrix)
+				v1 = self.transform(v1,modelMatrix)
+				v2 = self.transform(v2,modelMatrix)
 				if vertCount > 3:
-					v3 = self.transform(v3,translate, scale)
+					v3 = self.transform(v3,modelMatrix)
 
 				if self.active_texture:
 					vt0 = model.texcoords[face[0][1] - 1]
@@ -304,8 +378,16 @@ class Render(object):
 				vn0 = model.normals[face[0][2] - 1]
 				vn1 = model.normals[face[1][2] - 1]
 				vn2 = model.normals[face[2][2] - 1]
+
+				vn0 = self.transform(vn0, rotationMatrix)
+				vn1 = self.transform(vn1, rotationMatrix)
+				vn2 = self.transform(vn2, rotationMatrix)
+
 				if vertCount > 3:
 					vn3 = model.normals[face[3][2] -1]
+					vn3 = self.transform(vn3, rotationMatrix)
+				
+
 
 				self.triangle_bc(v0,v1,v2, texcoords = (vt0,vt1,vt2), normals= (vn0, vn1, vn2))
 				if vertCount > 3: #asumamos que 4, un cuadrado
@@ -445,10 +527,10 @@ class Render(object):
     #Barycentric Coordinates
 	def triangle_bc(self, A, B, C, texcoords = (), normals = (), _color = None):
 		#bounding box
-		minX = min(A.x, B.x, C.x)
-		minY = min(A.y, B.y, C.y)
-		maxX = max(A.x, B.x, C.x)
-		maxY = max(A.y, B.y, C.y)
+		minX = round(min(A.x, B.x, C.x))
+		minY = round(min(A.y, B.y, C.y))
+		maxX = round(max(A.x, B.x, C.x))
+		maxY = round(max(A.y, B.y, C.y))
 
 		for x in range(minX, maxX + 1):
 			for y in range(minY, maxY + 1):

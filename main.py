@@ -12,20 +12,11 @@ r = Render()
 r.glCreateWindow(1000,1000)
 r.glClear()
 
-r.active_texture = Texture('./models/model.bmp')
-r.active_shader = outline
+r.active_texture = Texture('./models/horse.bmp')
+r.active_shader = toon_mod
 
-#r.light = V3(1,0,0)
-
-r.loadModel('./models/model.obj', V3(500,500,0), V3(150,150,150))
-
-# r.active_shader = outline
-
-# r.loadModel('./models/model.obj', V3(500,500,0), V3(150,150,150))
-
-# r.active_shader = toon_mod
-
-# r.loadModel('./models/model.obj', V3(750,500,0), V3(150,150,150))
+r.loadModel('./models/horse.obj', V3(500,300,0), V3(2,2,2), V3(0,90,0))
 
 
-r.glFinish('output2.bmp')
+
+r.glFinish('output.bmp')
