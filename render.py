@@ -2,7 +2,9 @@ from data_types_module import dword, word, char
 from utils import color
 from obj import Obj
 from collections import namedtuple
-from math import sin, cos
+from math import sin, cos, tan
+import numpy
+
 
 BLACK = color(0, 0, 0)
 WHITE = color(1, 1, 1)
@@ -96,20 +98,96 @@ def matXvect(matrix1, vector):
 				matrix[0][i] += matrix1[i][k] * vector[k]
 	return matrix
 
+
+def eliminate(r1, r2, col, target=0):
+    fac = (r2[col]-target) / r1[col]
+    for i in range(len(r2)):
+        r2[i] -= fac * r1[i]
+
+def gauss(a):
+    for i in range(len(a)):
+        if a[i][i] == 0:
+            for j in range(i+1, len(a)):
+                if a[i][j] != 0:
+                    a[i], a[j] = a[j], a[i]
+                    break
+            else:
+                print("MATRIX NOT INVERTIBLE")
+                return -1
+        for j in range(i+1, len(a)):
+            eliminate(a[i], a[j], i)
+    for i in range(len(a)-1, -1, -1):
+        for j in range(i-1, -1, -1):
+            eliminate(a[i], a[j], i)
+    for i in range(len(a)):
+        eliminate(a[i], a[i], i, target=1)
+    return a
+
+def inverse(a):
+    tmp = [[] for _ in a]
+    for i,row in enumerate(a):
+        assert len(row) == len(a)
+        tmp[i].extend(row + [0]*i + [1] + [0]*(len(a)-i-1))
+    gauss(tmp)
+    ret = []
+    for i in range(len(tmp)):
+        ret.append(tmp[i][len(tmp[i])//2:])
+    return ret
+
 class Render(object):
 
 	#constructor
-	def __init__(self):
+	def __init__(self, width, height):
 		self.framebuffer = []
 		self.curr_color = WHITE
 		self.light = V3(0,0,1)
 		self.active_texture = None
 		self.active_shader = None
+		self.camPosition = V3(0,0,0)
+		self.camRotation = V3(0,0,0)
+		self.glCreateWindow(width, height)
+		self.glClear()
+		self.createViewMatrix()
+		self.createProjectionMatrix()
+
+	def createViewMatrix(self):
+		camMatrix = self.createObjectMatrix(translate=self.camPosition, rotate=self.camRotation)
+		self.viewMatrix = inverse(camMatrix)
+
+	def lookAt(self, eye, camPosition = V3(0,0,0)):
+		forward = sub(camPosition, eye)
+		forward = norm(forward)
+		
+		right = cross(V3(0,1,0), forward)
+		right = norm(right)
+		
+		up = cross(forward, right)
+		up = norm(up)
+
+		camMatrix = [[right[0],up[0],forward[0],camPosition.x],
+					[right[1],up[1],forward[1],camPosition.y],
+					[right[2],up[2],forward[2],camPosition.z],
+					[0,0,0,1]]
+		
+		self.viewMatrix = inverse(camMatrix)
+
+
+	def createProjectionMatrix(self, n=0.1, f=1000, fov= 60):
+
+		t = tan(_deg2rad(fov / 2)) * n
+		r = t * self.viewportWidth / self.viewportHeight
+
+		self.projectionMatrix = [[n/r,0,0,0],
+								[0,n/t,0,0],
+								[0,0,-(f+n)/(f-n),-(2*f*n)/(f - n)],
+								[0,0,-1,0]]
+
 
 	def glCreateWindow(self, width, height):
 		#width and height for the framebuffer
 		self.width = width
 		self.height = height
+		self.glViewport(0,0,width,height)
 
 	def glInit(self):
 		self.curr_color = BLACK
@@ -120,12 +198,17 @@ class Render(object):
 		self.viewportWidth = width
 		self.viewportHeight = height
 
+		self.viewportMatrix = 	[[width/2,0,0,x + width/2],
+								[0,height/2,0,y +height/2],
+								[0,0,0.5,0.5],
+								[0,0,0,1]]
+
 	def glClear(self):
 		self.framebuffer = [[BLACK for x in range(
 		    self.width)] for y in range(self.height)]
 		
 		#Zbuffer (buffer de profundidad)
-		self.zbuffer = [ [ -float('inf') for x in range(self.width)] for y in range(self.height) ]
+		self.zbuffer = [ [ float('inf') for x in range(self.width)] for y in range(self.height) ]
 		
 
 	def glClearColor(self, r, g, b):
@@ -146,6 +229,10 @@ class Render(object):
 		
 
 	def glVertex_coord(self, x, y, color= None):
+
+		if x < self.viewportX or x >= self.viewportX + self.viewportWidth or  y < self.viewportY or y >= self.viewportY + self.viewportHeight:
+			return 
+
 		if x >= self.width or x < 0 or y >= self.height or y < 0:
 			return
 		try:
@@ -274,7 +361,7 @@ class Render(object):
 	def transform(self, vertex, vMatrix):
 
 		augVertex= [vertex[0], vertex[1], vertex[2], 1]
-		transVertex = matXvect(vMatrix, augVertex)
+		transVertex = matXvect(self.viewportMatrix, matXvect(self.projectionMatrix, matXvect(self.viewMatrix, matXvect(vMatrix, augVertex)[0])[0])[0])
 
 		transVertex = 	V3(transVertex[0][0] / transVertex[0][3],
 						transVertex[0][1] / transVertex[0][3],
@@ -283,8 +370,18 @@ class Render(object):
 		
 		return transVertex
 
+	def dirTransform(self, vertex, vMatrix):
 
-	def createModelMatrix(self, translate = V3(0,0,0), scale = V3(1,1,1), rotate=V3(0,0,0)):
+		augVertex= [vertex[0], vertex[1], vertex[2], 0]
+		transVertex = matXvect(vMatrix, augVertex)
+		transVertex = 	V3(transVertex[0][0],
+						transVertex[0][1],
+						transVertex[0][2])
+
+		
+		return transVertex
+
+	def createObjectMatrix(self, translate = V3(0,0,0), scale = V3(1,1,1), rotate=V3(0,0,0)):
 
 		translateMatrix = [[1, 0, 0, translate.x],
 							[0, 1, 0, translate.y],
@@ -326,7 +423,7 @@ class Render(object):
 	def loadModel(self, filename, translate=V3(0,0,0), scale=V3(1,1,1), rotate=V3(0,0,0), isWireframe = False):
 		model = Obj(filename)
 
-		modelMatrix = self.createModelMatrix(translate, scale, rotate)
+		modelMatrix = self.createObjectMatrix(translate, scale, rotate)
 
 		rotationMatrix = self.createRotationMatrix(rotate)
 
@@ -379,13 +476,13 @@ class Render(object):
 				vn1 = model.normals[face[1][2] - 1]
 				vn2 = model.normals[face[2][2] - 1]
 
-				vn0 = self.transform(vn0, rotationMatrix)
-				vn1 = self.transform(vn1, rotationMatrix)
-				vn2 = self.transform(vn2, rotationMatrix)
+				vn0 = self.dirTransform(vn0, rotationMatrix)
+				vn1 = self.dirTransform(vn1, rotationMatrix)
+				vn2 = self.dirTransform(vn2, rotationMatrix)
 
 				if vertCount > 3:
 					vn3 = model.normals[face[3][2] -1]
-					vn3 = self.transform(vn3, rotationMatrix)
+					vn3 = self.dirTransform(vn3, rotationMatrix)
 				
 
 
@@ -542,7 +639,7 @@ class Render(object):
 				if u >= 0 and v >= 0 and w >= 0:
 
 					z = A.z * u + B.z * v + C.z * w
-					if z > self.zbuffer[y][x]:
+					if z < self.zbuffer[y][x] and z<=1 and z>=-1:
 						
 						
 						r, g, b = self.active_shader(
