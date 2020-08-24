@@ -28,10 +28,14 @@ posModel = V3(0,5,-20)
 and you will get this results:
 
 ### Low angle shot
+![alt text](https://github.com/RobertoFigueroa/Graphics-Transformations/blob/master/lowangle.bmp?raw=true)
 
 ### Medium  shot
+![alt text](https://github.com/RobertoFigueroa/Graphics-Transformations/blob/master/mediumshot.bmp?raw=true)
 
 ### High angle shot
+![alt text](https://github.com/RobertoFigueroa/Graphics-Transformations/blob/master/highangle.bmp?raw=true)
 
 ### Dutch angle shot
+![alt text](https://github.com/RobertoFigueroa/Graphics-Transformations/blob/master/dutchangle.bmp?raw=true)
 
