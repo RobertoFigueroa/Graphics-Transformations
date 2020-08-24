@@ -182,3 +182,23 @@ def outline(render, **kwargs):
         return r, g, b
     else:
         return 0, 0, 0
+
+
+def unlit(render, **kwargs):
+    u, v, w = kwargs['baryCoords']
+    ta, tb, tc = kwargs['texCoords']
+    b, g, r = kwargs['color']
+
+    b /= 255
+    g /= 255
+    r /= 255
+
+    if render.active_texture:
+        tx = ta.x * u + tb.x * v + tc.x * w
+        ty = ta.y * u + tb.y * v + tc.y * w
+        texColor = render.active_texture.getColor(tx,ty)
+        b *= texColor[0] / 255
+        g *= texColor[1] / 255
+        r *= texColor[2] / 255
+
+    return r, g, b

@@ -4,19 +4,37 @@ from obj import Obj
 
 from texture import Texture
 
-from shaders import gourad, toon, outline, toon_mod
+from shaders import gourad, toon, outline, toon_mod, unlit
 
 from utils import color
 
 r = Render(1000, 1000)
 
-posModel = V3(0,0,-5)
+r.light = V3(0,0,1)
 
-#r.lookAt(posModel, V3(2,2,0))
+posModel = V3(0,0,-20)
 
-r.active_texture = Texture('./models/horse.bmp')
-r.active_shader = toon_mod
+#low-angle-shot
+# r.lookAt(posModel, V3(0,-8,0))
 
-r.loadModel('./models/horse.obj', posModel, V3(1,1,1), V3(0,0,0))
+#medium shot
+# r.lookAt(posModel, V3(0,0,0))
+# posModel = V3(0,0,-30)
 
-r.glFinish('output.bmp')
+
+# highangle
+r.lookAt(posModel, V3(0,15,0))
+posModel = V3(0,5,-20)
+
+#dutch angle
+# r.camRotation = V3(0,0,15)
+# r.createViewMatrix()
+# r.createProjectionMatrix()
+# posModel = V3(0,0,-20)
+
+r.active_texture = Texture('./models/heli.bmp')
+r.active_shader = unlit
+
+r.loadModel('./models/heli.obj', posModel, V3(0.1,0.1,0.1), V3(0,0,0))
+
+r.glFinish('highangle.bmp')

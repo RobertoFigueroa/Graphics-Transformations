@@ -367,7 +367,7 @@ class Render(object):
 						transVertex[0][1] / transVertex[0][3],
 						transVertex[0][2] / transVertex[0][3])
 
-		
+		print(transVertex)		
 		return transVertex
 
 	def dirTransform(self, vertex, vMatrix):
